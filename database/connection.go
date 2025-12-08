@@ -13,8 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// Variabel Global Exported
-// Gunakan variabel ini di Repository/Service nanti
+
 var (
 	PgDB        *sql.DB         
 	MongoClient *mongo.Client   
