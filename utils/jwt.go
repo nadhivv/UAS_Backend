@@ -1,46 +1,50 @@
 package utils
 
 import (
-	"errors"
-	"log" 
-	"os"
 	"time"
 
+	"UAS/app/model"
+	"fmt"
+
 	"github.com/golang-jwt/jwt/v5"
-	"UAS/app/model" 
+	"github.com/google/uuid"
 )
 
-// Fungsi helper private
-func getJWTSecret() []byte {
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		log.Fatal("FATAL: JWT_SECRET environment variable is not set. Application cannot start.")
-	}
-	return []byte(secret)
-}
+var jwtSecret = []byte("your-secret-key-change-this") 
 
-func GenerateToken(user models.User, roleName string) (string, error) {
+func GenerateToken(user *models.User, permissions []string) (string, error) {
 	claims := models.JWTClaims{
-		UserID: user.ID.String(),
-		Email:  user.Email,
-		Role:   roleName,
+		UserID:      user.ID.String(),
+		Email:       user.Email,
+		RoleID:      user.RoleID.String(),
+		Permissions: permissions,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)), 
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    "sistem-prestasi-mahasiswa",
+			NotBefore: jwt.NewNumericDate(time.Now()),
+			Issuer:    "achievement-system",
+			Subject:   user.ID.String(),
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(getJWTSecret())
+	return token.SignedString(jwtSecret)
+}
+
+func GenerateRefreshToken(userID uuid.UUID) (string, error) {
+	claims := jwt.RegisteredClaims{
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)),
+		IssuedAt:  jwt.NewNumericDate(time.Now()),
+		Subject:   userID.String(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(jwtSecret)
 }
 
 func ValidateToken(tokenString string) (*models.JWTClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &models.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected signing method")
-		}
-		return getJWTSecret(), nil
+		return jwtSecret, nil
 	})
 
 	if err != nil {
@@ -51,5 +55,28 @@ func ValidateToken(tokenString string) (*models.JWTClaims, error) {
 		return claims, nil
 	}
 
-	return nil, jwt.ErrInvalidKey
+	return nil, jwt.ErrSignatureInvalid
+}
+
+func ValidateRefreshToken(tokenString string) (*jwt.RegisteredClaims, error) {
+	token, err := jwt.ParseWithClaims(
+			tokenString, 
+			&jwt.RegisteredClaims{},  
+			func(token *jwt.Token) (interface{}, error) {
+					if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+							return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+					}
+					return jwtSecret, nil
+			},
+	)
+	
+	if err != nil {
+			return nil, err
+	}
+	
+	if claims, ok := token.Claims.(*jwt.RegisteredClaims); ok && token.Valid {
+			return claims, nil
+	}
+	
+	return nil, jwt.ErrSignatureInvalid
 }
