@@ -18,7 +18,7 @@ func SetupRoutes(app *fiber.App) {
     
     userService := service.NewUserService(userRepo, roleRepo, studentRepo, lecturerRepo)
     
-    examAPI := app.Group("/exam/api")
+    examAPI := app.Group("/exam/api") //ganti
     
     setupAuthRoutes(examAPI, userRepo, roleRepo)
     setupUserRoutes(examAPI, userService, userRepo, roleRepo)
@@ -26,7 +26,7 @@ func SetupRoutes(app *fiber.App) {
     examAPI.Get("/health", func(c *fiber.Ctx) error {
         return c.JSON(fiber.Map{
             "status":  "OK",
-            "service": "Student Achievement System API",
+            "service": "asdjnaskjdnaskjdn",
             "version": "1.0",
         })
     })

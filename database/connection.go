@@ -31,7 +31,7 @@ func connectPostgres() {
 		"host=%s user=%s password=%s dbname=%s port=%s sslmode=disable",
 		os.Getenv("DB_HOST"),
 		os.Getenv("DB_USER"),
-		os.Getenv("DB_PASS"), 
+		os.Getenv("DB_PASSWORD"), 
 		os.Getenv("DB_NAME"),
 		os.Getenv("DB_PORT"),
 	)
@@ -59,9 +59,9 @@ func connectMongo() {
 		log.Fatal("MONGO_URI environment variable is not set")
 	}
 
-	dbName := os.Getenv("MONGO_DB_NAME") // Pisahkan nama DB Mongo dan Postgres
+	dbName := os.Getenv("DB_NAME") // Pisahkan nama DB Mongo dan Postgres
 	if dbName == "" {
-		log.Fatal("MONGO_DB_NAME environment variable is not set")
+		log.Fatal("DB_NAME environment variable is not set")
 	}
 
 	clientOptions := options.Client().ApplyURI(mongoURI)
@@ -75,7 +75,6 @@ func connectMongo() {
 		log.Fatal("Error connecting to MongoDB client:", err)
 	}
 
-	// Ping database untuk verifikasi
 	if err = MongoClient.Ping(ctx, nil); err != nil {
 		log.Fatal("Error pinging MongoDB:", err)
 	}
