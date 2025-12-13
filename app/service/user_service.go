@@ -237,12 +237,18 @@ func (s *UserService) Create(c *fiber.Ctx) error {
 func (s *UserService) createUserProfile(user *models.User, req *models.CreateUserRequest, roleName string) error {
 	switch roleName {
 	case "Mahasiswa":
-		if req.StudentID == nil || req.ProgramStudy == nil || req.AcademicYear == nil {
-			return errors.New("student data incomplete: need studentId, programStudy, and academicYear")
+		if req.StudentID == nil || *req.StudentID == "" {
+			return errors.New("studentId is required for Mahasiswa role")
+		}
+		if req.ProgramStudy == nil || *req.ProgramStudy == "" {
+			return errors.New("programStudy is required for Mahasiswa role")
+		}
+		if req.AcademicYear == nil || *req.AcademicYear == "" {
+			return errors.New("academicYear is required for Mahasiswa role")
 		}
 
 		student := models.Student{
-			ID:           uuid.New(),
+			ID:           uuid.New(),  
 			UserID:       user.ID,
 			StudentID:    *req.StudentID,
 			ProgramStudy: *req.ProgramStudy,
@@ -251,33 +257,39 @@ func (s *UserService) createUserProfile(user *models.User, req *models.CreateUse
 			CreatedAt:    time.Now(),
 		}
 
+		// Handle advisor jika ada
 		if req.AdvisorID != nil && *req.AdvisorID != "" {
 			advisorID, err := uuid.Parse(*req.AdvisorID)
 			if err != nil {
-					return fmt.Errorf("invalid advisor ID format: %w", err)
+				return fmt.Errorf("invalid advisor ID format: %w", err)
 			}
 			
+			// Validasi advisor exist
 			advisor, err := s.lecturerRepo.GetByID(advisorID)
 			if err != nil {
-					return fmt.Errorf("error checking advisor: %w", err)
+				return fmt.Errorf("error checking advisor: %w", err)
 			}
 			if advisor == nil {
-					return fmt.Errorf("advisor not found with ID: %s", advisorID)
+				return fmt.Errorf("advisor not found with ID: %s", advisorID)
 			}
 			
 			student.AdvisorID = &advisorID
-	}
+		}
 
+		// Create student
 		_, err := s.studentRepo.Create(student)
 		return err
 
 	case "Dosen Wali":
-		if req.LecturerID == nil || req.Department == nil {
-			return errors.New("lecturer data incomplete: need lecturerId and department")
+		if req.LecturerID == nil || *req.LecturerID == "" {
+			return errors.New("lecturerId is required for Dosen Wali role")
+		}
+		if req.Department == nil || *req.Department == "" {
+			return errors.New("department is required for Dosen Wali role")
 		}
 
 		lecturer := models.Lecturer{
-			ID:         uuid.New(),
+			ID:         uuid.New(),  // <- INI PENTING JUGA!
 			UserID:     user.ID,
 			LecturerID: *req.LecturerID,
 			Department: *req.Department,
@@ -286,11 +298,48 @@ func (s *UserService) createUserProfile(user *models.User, req *models.CreateUse
 
 		_, err := s.lecturerRepo.Create(lecturer)
 		return err
-	}
 
-	return nil
+	default:
+		return nil
+	}
 }
 
+
+func (s *UserService) Delete(c *fiber.Ctx) error {
+	idStr := c.Params("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"error": "Invalid user ID",
+		})
+	}
+
+	// Check if user exists (active only)
+	user, err := s.userRepo.GetByID(id)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error": "Failed to check user",
+			"details": err.Error(),
+		})
+	}
+	if user == nil {
+		return c.Status(404).JSON(fiber.Map{
+			"error": "User not found or already inactive",
+		})
+	}
+
+	// Soft delete user
+	if err := s.userRepo.SoftDelete(id); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error": "Failed to delete user",
+			"details": err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "User deleted successfully (soft delete)",
+	})
+}
 
 func (s *UserService) Update(c *fiber.Ctx) error {
 	idStr := c.Params("id")
@@ -360,45 +409,6 @@ func (s *UserService) Update(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"message": "User updated successfully",
-	})
-}
-
-// -------------------------------------------------------------
-// DELETE USER (SOFT DELETE)
-// -------------------------------------------------------------
-func (s *UserService) Delete(c *fiber.Ctx) error {
-	idStr := c.Params("id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		return c.Status(400).JSON(fiber.Map{
-			"error": "Invalid user ID",
-		})
-	}
-
-	// Check if user exists (active only)
-	user, err := s.userRepo.GetByID(id)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"error": "Failed to check user",
-			"details": err.Error(),
-		})
-	}
-	if user == nil {
-		return c.Status(404).JSON(fiber.Map{
-			"error": "User not found or already inactive",
-		})
-	}
-
-	// Soft delete user
-	if err := s.userRepo.SoftDelete(id); err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"error": "Failed to delete user",
-			"details": err.Error(),
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"message": "User deleted successfully (soft delete)",
 	})
 }
 
