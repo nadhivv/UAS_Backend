@@ -3,13 +3,14 @@ package repository
 import (
 	"database/sql"
 	"errors"
+	"github.com/google/uuid"
 
 	"UAS/app/model"
 )
 
 	type StudentRepository interface {
 		GetByUserID(userID string) (*models.Student, error)
-		Create(student models.Student) (string, error)
+		Create(student models.Student) (uuid.UUID, error)
 		GetAll() ([]models.Student, error)
 		GetAllByAdvisorID(advisorID string) ([]models.Student, error)
 	}
@@ -37,17 +38,29 @@ import (
 		return &s, nil
 	}
 
-	func (r *studentRepo) Create(student models.Student) (string, error) {
-		var id string
-		err := r.DB.QueryRow(`
-			INSERT INTO students (user_id, student_id, program_study, academic_year, advisor_id, created_at)
-			VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING id
-		`, student.UserID, student.StudentID, student.ProgramStudy, student.AcademicYear, student.AdvisorID).Scan(&id)
-		if err != nil {
-			return "", err
-		}
-		return id, nil
-	}
+func (r *studentRepo) Create(student models.Student) (uuid.UUID, error) {
+    if student.ID == uuid.Nil {
+        student.ID = uuid.New()
+    }
+    
+    _, err := r.DB.Exec(`
+        INSERT INTO students (id, user_id, student_id, program_study, academic_year, advisor_id, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, NOW())
+    `, 
+        student.ID,          // $1 - ID harus ada
+        student.UserID,      // $2
+        student.StudentID,   // $3
+        student.ProgramStudy, // $4
+        student.AcademicYear, // $5
+        student.AdvisorID,   // $6 - bisa null
+    )
+    
+    if err != nil {
+        return uuid.Nil, err
+    }
+    
+    return student.ID, nil
+}
 
 	func (r *studentRepo) GetAll() ([]models.Student, error) {
 		rows, err := r.DB.Query(`
