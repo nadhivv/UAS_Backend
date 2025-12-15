@@ -3,7 +3,7 @@ package utils
 import (
 	"time"
 
-	"UAS/app/model"
+	"UAS/app/models"
 	"fmt"
 
 	"github.com/golang-jwt/jwt/v5"
