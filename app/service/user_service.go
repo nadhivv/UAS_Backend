@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"UAS/app/model"
+	"UAS/app/models"
 	"UAS/app/repository"
 	"UAS/utils"
 
