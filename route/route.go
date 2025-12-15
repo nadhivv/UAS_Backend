@@ -18,7 +18,7 @@ func SetupRoutes(app *fiber.App) {
     
     userService := service.NewUserService(userRepo, roleRepo, studentRepo, lecturerRepo)
     
-    examAPI := app.Group("/ujian/api") //ganti
+    examAPI := app.Group("/uas/api")
     
     setupAuthRoutes(examAPI, userRepo, roleRepo)
     setupUserRoutes(examAPI, userService, userRepo, roleRepo)
