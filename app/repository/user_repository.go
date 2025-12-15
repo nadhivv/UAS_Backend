@@ -6,16 +6,16 @@ import (
 	"fmt"
 	"time"
 
-	"UAS/app/model"
+	"UAS/app/models"
 	"github.com/google/uuid"
 )
 
 type UserRepository interface {
 	// Basic CRUD
-	GetByID(id uuid.UUID) (*models.User, error)           // Hanya active users
-	GetByEmail(email string) (*models.User, error)        // Hanya active users
-	GetByUsername(username string) (*models.User, error)  // Hanya active users
-	GetByUsernameOrEmail(identifier string) (*models.User, error) // Hanya active users
+	GetByID(id uuid.UUID) (*models.User, error)           
+	GetByEmail(email string) (*models.User, error)        
+	GetByUsername(username string) (*models.User, error)  
+	GetByUsernameOrEmail(identifier string) (*models.User, error) 
 	Create(user *models.User) (uuid.UUID, error)
 	Update(id uuid.UUID, req *models.UpdateUserRequest) error
 	UpdatePassword(id uuid.UUID, hashedPassword string) error

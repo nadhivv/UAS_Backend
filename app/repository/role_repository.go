@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"UAS/app/model"
+	"UAS/app/models"
 	"github.com/google/uuid"
 )
 
