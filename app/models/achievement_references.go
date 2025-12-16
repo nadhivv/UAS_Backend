@@ -11,6 +11,7 @@ const (
 	AchievementStatusSubmitted = "submitted"
 	AchievementStatusVerified  = "verified"
 	AchievementStatusRejected  = "rejected"
+	AchievementStatusDeleted   = "deleted"
 )
 
 type AchievementReference struct {
