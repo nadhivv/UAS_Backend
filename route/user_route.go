@@ -14,18 +14,15 @@ func setupUserRoutes(
 	userRepo repository.UserRepository,
 	roleRepo repository.RoleRepository,
 ) {
-	userRoutes := router.Group("/users")
+	userRoutes := router.Group("/users",middleware.RequireAuth(userRepo))
 	
-	// ALL ROLES
-	user := userRoutes.Group("",)
+	user := userRoutes.Group("",middleware.RequireAuth(userRepo), middleware.AdminOnly(roleRepo))
 	userRoutes.Get("/", userService.GetAll)
 	userRoutes.Get("/:id", userService.GetByID)
 	userRoutes.Get("/search", userService.SearchByName)
 
-	// ADMIN ONLY ROUTES
-	user.Post("/", userService.Create, middleware.RequireAuth(userRepo),middleware.AdminOnly(roleRepo))
-	user.Put("/:id", userService.Update, middleware.RequireAuth(userRepo),middleware.AdminOnly(roleRepo))
-	user.Delete("/:id", userService.Delete, middleware.RequireAuth(userRepo),middleware.AdminOnly(roleRepo))
-	user.Put("/:id/role", userService.UpdateRole, middleware.RequireAuth(userRepo),middleware.AdminOnly(roleRepo))
-	user.Get("/inactive", userService.GetInactiveUsers, middleware.RequireAuth(userRepo),middleware.AdminOnly(roleRepo))
+	user.Post("/", userService.Create)
+	user.Put("/:id", userService.Update)
+	user.Delete("/:id", userService.Delete)
+	user.Put("/:id/role", userService.UpdateRole)
 }
