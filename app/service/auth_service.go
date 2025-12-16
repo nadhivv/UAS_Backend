@@ -286,7 +286,7 @@ func (s *AuthService) getStudentProfile(userID uuid.UUID) (*models.Student, erro
 }
 
 func (s *AuthService) getLecturerProfile(userID uuid.UUID) (*models.Lecturer, error) {
-	// Butuh LecturerRepository di AuthService
+	// Butuh LecturerRepository di Auth	Service
 	return nil, nil
 }
 

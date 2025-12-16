@@ -55,7 +55,7 @@ func RequireAuth(userRepo repository.UserRepository) fiber.Handler {
 		c.Locals("user_id", user.ID)
 		c.Locals("user", user)
 		c.Locals("role_id", user.RoleID)
-		c.Locals("permissions", claims.Permissions) // Dari JWT claims
+		c.Locals("permissions", claims.Permissions)
 
 		return c.Next()
 	}
