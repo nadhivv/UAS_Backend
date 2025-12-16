@@ -255,7 +255,6 @@ func (r *achievementReferenceRepo) SoftDelete(id uuid.UUID) error {
 	return nil
 }
 
-// FR-004: Submit untuk Verifikasi
 func (r *achievementReferenceRepo) SubmitForVerification(id uuid.UUID) error {
 	// Cek status saat ini
 	ref, err := r.GetReferenceByID(id)
