@@ -479,7 +479,6 @@ func (s *StudentLecturerService) GetAllLecturers(c *fiber.Ctx) error {
 	})
 }
 
-// 6. GET /api/v1/lecturers/:id/advisees
 func (s *StudentLecturerService) GetLecturerAdvisees(c *fiber.Ctx) error {
 	lecturerIDStr := c.Params("id")
 	lecturerID, err := uuid.Parse(lecturerIDStr)
