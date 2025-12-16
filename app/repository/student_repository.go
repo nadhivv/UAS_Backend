@@ -10,10 +10,12 @@ import (
 
 type StudentRepository interface {
 	GetByUserID(userID uuid.UUID) (*models.Student, error)
-	GetByID(id uuid.UUID) (*models.Student, error)  // TAMBAHKAN INI
+	GetByID(id uuid.UUID) (*models.Student, error) 
 	Create(student models.Student) (uuid.UUID, error)
 	GetAll() ([]models.Student, error)
 	GetAllByAdvisorID(advisorID string) ([]models.Student, error)
+	UpdateAdvisor(studentID uuid.UUID, advisorID *uuid.UUID) error
+	RemoveAdvisor(studentID uuid.UUID) error
 }
 
 type studentRepo struct {
@@ -119,4 +121,43 @@ func (r *studentRepo) GetAllByAdvisorID(advisorID string) ([]models.Student, err
 		students = append(students, s)
 	}
 	return students, nil
+}
+
+func (r *studentRepo) UpdateAdvisor(studentID uuid.UUID, advisorID *uuid.UUID) error {
+	var result sql.Result
+	var err error
+	
+	if advisorID == nil {
+		result, err = r.DB.Exec(`
+			UPDATE students 
+			SET advisor_id = NULL 
+			WHERE id = $1
+		`, studentID)
+	} else {
+		// Set advisor
+		result, err = r.DB.Exec(`
+			UPDATE students 
+			SET advisor_id = $1 
+			WHERE id = $2
+		`, advisorID, studentID)
+	}
+	
+	if err != nil {
+		return err
+	}
+	
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	
+	if rowsAffected == 0 {
+		return errors.New("student not found")
+	}
+	
+	return nil
+}
+
+func (r *studentRepo) RemoveAdvisor(studentID uuid.UUID) error {
+	return r.UpdateAdvisor(studentID, nil)
 }
