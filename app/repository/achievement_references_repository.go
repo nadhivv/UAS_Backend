@@ -17,6 +17,7 @@ type AchievementReferenceRepository interface {
 	GetReferenceByMongoID(mongoID string) (*models.AchievementReference, error)
 	UpdateReference(ref *models.AchievementReference) error
 	DeleteReference(id uuid.UUID) error
+	SoftDelete(id uuid.UUID) error
 	
 	// Status management (sesuai SRS)
 	SubmitForVerification(id uuid.UUID) error
@@ -78,15 +79,16 @@ func (r *achievementReferenceRepo) GetReferenceByID(id uuid.UUID) (*models.Achie
 	var verifiedBy sql.NullString
 	var rejectionNote sql.NullString
 	
+	// TAMBAH FILTER: status != 'deleted'
 	query := `
 		SELECT id, student_id, mongo_achievement_id, status, 
 		       submitted_at, verified_at, verified_by, rejection_note,
 		       created_at, updated_at
 		FROM achievement_references
-		WHERE id = $1
+		WHERE id = $1 AND status != $2
 	`
 	
-	err := r.DB.QueryRow(query, id).Scan(
+	err := r.DB.QueryRow(query, id, models.AchievementStatusDeleted).Scan(
 		&ref.ID,
 		&ref.StudentID,
 		&ref.MongoAchievementID,
@@ -130,15 +132,16 @@ func (r *achievementReferenceRepo) GetReferenceByMongoID(mongoID string) (*model
 	var verifiedBy sql.NullString
 	var rejectionNote sql.NullString
 	
+	// TAMBAH FILTER: status != 'deleted'
 	query := `
 		SELECT id, student_id, mongo_achievement_id, status, 
 		       submitted_at, verified_at, verified_by, rejection_note,
 		       created_at, updated_at
 		FROM achievement_references
-		WHERE mongo_achievement_id = $1
+		WHERE mongo_achievement_id = $1 AND status != $2
 	`
 	
-	err := r.DB.QueryRow(query, mongoID).Scan(
+	err := r.DB.QueryRow(query, mongoID, models.AchievementStatusDeleted).Scan(
 		&ref.ID,
 		&ref.StudentID,
 		&ref.MongoAchievementID,
@@ -204,6 +207,40 @@ func (r *achievementReferenceRepo) DeleteReference(id uuid.UUID) error {
 	result, err := r.DB.Exec(query, id)
 	if err != nil {
 		return err
+	}
+	
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	
+	if rowsAffected == 0 {
+		return errors.New("achievement reference not found")
+	}
+	
+	return nil
+}
+
+// achievement_reference_repository.go - Tambahkan method
+func (r *achievementReferenceRepo) SoftDelete(id uuid.UUID) error {
+	// Cek apakah achievement ada
+	ref, err := r.GetReferenceByID(id)
+	if err != nil {
+		return fmt.Errorf("failed to get achievement: %w", err)
+	}
+	if ref == nil {
+		return errors.New("achievement reference not found")
+	}
+	query := `
+		UPDATE achievement_references 
+		SET status = $1, 
+			updated_at = NOW()
+		WHERE id = $2
+	`
+	
+	result, err := r.DB.Exec(query, models.AchievementStatusDeleted, id)
+	if err != nil {
+		return fmt.Errorf("failed to soft delete achievement: %w", err)
 	}
 	
 	rowsAffected, err := result.RowsAffected()
@@ -325,11 +362,11 @@ func (r *achievementReferenceRepo) GetReferencesByStudentID(studentID uuid.UUID,
 	var whereClause string
 	var args []interface{}
 	
-	args = append(args, studentID)
-	whereClause = "WHERE student_id = $1"
+	args = append(args, studentID, models.AchievementStatusDeleted)
+	whereClause = "WHERE student_id = $1 AND status != $2"
 	
 	if status != "" {
-		whereClause += " AND status = $2"
+		whereClause += " AND status = $3"
 		args = append(args, status)
 	}
 	
@@ -396,15 +433,15 @@ func (r *achievementReferenceRepo) GetReferencesByAdvisor(advisorID uuid.UUID, s
 	var whereClause string
 	var args []interface{}
 	
-	args = append(args, advisorID)
+	args = append(args, advisorID, models.AchievementStatusDeleted)
 	whereClause = `
 		WHERE student_id IN (
 			SELECT id FROM students WHERE advisor_id = $1
-		)
+		) AND status != $2
 	`
 	
 	if status != "" {
-		whereClause += " AND status = $2"
+		whereClause += " AND status = $3"
 		args = append(args, status)
 	}
 	
@@ -471,16 +508,17 @@ func (r *achievementReferenceRepo) GetAllReferences(status string, limit, offset
 	var whereClause string
 	var args []interface{}
 	
+	// Default filter: exclude deleted
+	whereClause = "WHERE status != $1"
+	args = append(args, models.AchievementStatusDeleted)
+	
 	if status != "" {
-		whereClause = "WHERE status = $1"
+		whereClause += " AND status = $2"
 		args = append(args, status)
 	}
 	
-	// Count total
-	countQuery := "SELECT COUNT(*) FROM achievement_references"
-	if whereClause != "" {
-		countQuery += " " + whereClause
-	}
+	// Count total (excluding deleted)
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM achievement_references %s", whereClause)
 	
 	var total int
 	err := r.DB.QueryRow(countQuery, args...).Scan(&total)
@@ -556,10 +594,10 @@ func (r *achievementReferenceRepo) CheckOwnership(achievementID, studentID uuid.
 	query := `
 		SELECT COUNT(*) 
 		FROM achievement_references 
-		WHERE id = $1 AND student_id = $2
+		WHERE id = $1 AND student_id = $2 AND status != $3
 	`
 	
-	err := r.DB.QueryRow(query, achievementID, studentID).Scan(&count)
+	err := r.DB.QueryRow(query, achievementID, studentID, models.AchievementStatusDeleted).Scan(&count)
 	if err != nil {
 		return false, err
 	}
