@@ -16,13 +16,14 @@ func setupUserRoutes(
 ) {
 	userRoutes := router.Group("/users",middleware.RequireAuth(userRepo))
 	
-	user := userRoutes.Group("",middleware.RequireAuth(userRepo), middleware.AdminOnly(roleRepo))
+	user := userRoutes.Group("", middleware.AdminOnly(roleRepo))
 	userRoutes.Get("/", userService.GetAll)
 	userRoutes.Get("/:id", userService.GetByID)
 	userRoutes.Get("/search", userService.SearchByName)
 
-	user.Post("/", userService.Create)
-	user.Put("/:id", userService.Update)
-	user.Delete("/:id", userService.Delete)
-	user.Put("/:id/role", userService.UpdateRole)
+	user.Post("/", userService.Create, middleware.RequireAuth(userRepo),middleware.AdminOnly(roleRepo))
+	user.Put("/:id", userService.Update, middleware.RequireAuth(userRepo),middleware.AdminOnly(roleRepo))
+	user.Delete("/:id", userService.Delete, middleware.RequireAuth(userRepo),middleware.AdminOnly(roleRepo))
+	user.Put("/:id/role", userService.UpdateRole, middleware.RequireAuth(userRepo),middleware.AdminOnly(roleRepo))
+	user.Get("/inactive", userService.GetInactiveUsers, middleware.RequireAuth(userRepo),middleware.AdminOnly(roleRepo))
 }
