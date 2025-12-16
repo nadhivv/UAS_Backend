@@ -23,6 +23,7 @@ func SetupRoutes(app *fiber.App) {
     setupAuthRoutes(examAPI, userRepo, roleRepo)
     setupUserRoutes(examAPI, userService, userRepo, roleRepo)
 		SetupAchievementRoutes(examAPI, userRepo, roleRepo, studentRepo, lecturerRepo, database.MongoDB)
+		SetupStudentLecturerRoutes(examAPI,userRepo,roleRepo,studentRepo,lecturerRepo,database.MongoDB,)
     
     examAPI.Get("/health", func(c *fiber.Ctx) error {
         return c.JSON(fiber.Map{
