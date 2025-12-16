@@ -9,7 +9,7 @@ import (
 )
 
 type StudentRepository interface {
-	GetByUserID(userID string) (*models.Student, error)
+	GetByUserID(userID uuid.UUID) (*models.Student, error)
 	GetByID(id uuid.UUID) (*models.Student, error)  // TAMBAHKAN INI
 	Create(student models.Student) (uuid.UUID, error)
 	GetAll() ([]models.Student, error)
@@ -24,7 +24,7 @@ func NewStudentRepository(db *sql.DB) StudentRepository {
 	return &studentRepo{DB: db}
 }
 
-func (r *studentRepo) GetByUserID(userID string) (*models.Student, error) {
+func (r *studentRepo) GetByUserID(userID uuid.UUID) (*models.Student, error) {
 	var s models.Student
 	err := r.DB.QueryRow(`
 		SELECT id, user_id, student_id, program_study, academic_year, advisor_id, created_at
