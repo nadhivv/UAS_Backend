@@ -20,7 +20,7 @@ func SetupRoutes(app *fiber.App) {
     
     examAPI := app.Group("/uas/api")
     
-    setupAuthRoutes(examAPI, userRepo, roleRepo)
+    setupAuthRoutes(examAPI, userRepo, roleRepo, studentRepo, lecturerRepo)
     setupUserRoutes(examAPI, userService, userRepo, roleRepo)
 		SetupAchievementRoutes(examAPI, userRepo, roleRepo, studentRepo, lecturerRepo, database.MongoDB)
 		SetupStudentLecturerRoutes(examAPI,userRepo,roleRepo,studentRepo,lecturerRepo,database.MongoDB,)

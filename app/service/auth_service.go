@@ -12,16 +12,27 @@ import (
 )
 
 type AuthService struct {
-	userRepo repository.UserRepository
-	roleRepo repository.RoleRepository
+	userRepo     repository.UserRepository
+	roleRepo     repository.RoleRepository
+	studentRepo  repository.StudentRepository
+	lecturerRepo repository.LecturerRepository
 }
 
-func NewAuthService(userRepo repository.UserRepository, roleRepo repository.RoleRepository) *AuthService {
+
+func NewAuthService(
+	userRepo repository.UserRepository,
+	roleRepo repository.RoleRepository,
+	studentRepo repository.StudentRepository,
+	lecturerRepo repository.LecturerRepository,
+) *AuthService {
 	return &AuthService{
-		userRepo: userRepo,
-		roleRepo: roleRepo,
+		userRepo:     userRepo,
+		roleRepo:     roleRepo,
+		studentRepo:  studentRepo,
+		lecturerRepo: lecturerRepo,
 	}
 }
+
 
 func (s *AuthService) Login(c *fiber.Ctx) error {
 	var req models.LoginRequest
@@ -280,15 +291,14 @@ func (s *AuthService) Profile(c *fiber.Ctx) error {
 
 
 func (s *AuthService) getStudentProfile(userID uuid.UUID) (*models.Student, error) {
-	// Butuh StudentRepository di AuthService
-	// Untuk sekarang return nil, nanti bisa di-extend
-	return nil, nil
+	return s.studentRepo.GetByUserID(userID)
 }
 
+
 func (s *AuthService) getLecturerProfile(userID uuid.UUID) (*models.Lecturer, error) {
-	// Butuh LecturerRepository di Auth	Service
-	return nil, nil
+	return s.lecturerRepo.GetByUserID(userID)
 }
+
 
 func (s *AuthService) ChangePassword(c *fiber.Ctx) error {
 	userID, ok := c.Locals("user_id").(uuid.UUID)
