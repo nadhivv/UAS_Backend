@@ -53,7 +53,6 @@ func contains(slice []string, item string) bool {
 	return false
 }
 
-// ==================== 1. GET ALL ACHIEVEMENTS ====================
 func (s *AchievementService) GetAllAchievements(c *fiber.Ctx) error {
 	ctx := context.Background()
 
@@ -122,16 +121,37 @@ func (s *AchievementService) GetAllAchievements(c *fiber.Ctx) error {
 		return c.Status(403).JSON(fiber.Map{"error": "Access denied"})
 	}
 
+	// CEK JIKA TIDAK ADA DATA LANGSUNG RETURN
+	if len(references) == 0 {
+		return c.JSON(fiber.Map{
+			"success": true,
+			"data":    []interface{}{},
+			"pagination": fiber.Map{
+				"page":        page,
+				"limit":       limit,
+				"total":       0,
+				"total_pages": 0,
+				"has_next":    false,
+				"has_prev":    false,
+			},
+		})
+	}
+
 	// Get MongoDB IDs
 	var mongoIDs []string
 	for _, ref := range references {
 		mongoIDs = append(mongoIDs, ref.MongoAchievementID)
 	}
 
-	// Get achievements dari MongoDB
-	achievements, err := s.achievementRepo.GetAchievementsByIDs(ctx, mongoIDs)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Failed to get achievement details"})
+	// Get achievements dari MongoDB - TAMBAH CHECK ERROR KHUSUS
+	var achievements []models.Achievement
+	if len(mongoIDs) > 0 {
+		achievements, err = s.achievementRepo.GetAchievementsByIDs(ctx, mongoIDs)
+		if err != nil {
+			// JANGAN return error, tapi log dan lanjut dengan array kosong
+			fmt.Printf("Warning: Failed to get achievement details: %v\n", err)
+			achievements = []models.Achievement{}
+		}
 	}
 
 	// Combine data
@@ -145,6 +165,33 @@ func (s *AchievementService) GetAllAchievements(c *fiber.Ctx) error {
 	for _, ref := range references {
 		achievement, exists := achievementMap[ref.MongoAchievementID]
 		if !exists {
+			// Jika achievement tidak ditemukan di MongoDB, skip atau tampilkan data minimal
+			student, _ := s.studentRepo.GetByID(ref.StudentID)
+			var studentName, studentIDStr string
+			if student != nil {
+				studentUser, _ := s.userRepo.GetByID(student.UserID)
+				if studentUser != nil {
+					studentName = studentUser.FullName
+				}
+				studentIDStr = student.StudentID
+			}
+
+			// Data minimal jika achievement tidak ditemukan di MongoDB
+			results = append(results, fiber.Map{
+				"id":           ref.ID,
+				"status":       ref.Status,
+				"title":        "Achievement data not available",
+				"type":         "unknown",
+				"points":       0,
+				"submitted_at": ref.SubmittedAt,
+				"verified_at":  ref.VerifiedAt,
+				"created_at":   ref.CreatedAt,
+				"student": fiber.Map{
+					"id":         student.ID,
+					"name":       studentName,
+					"student_id": studentIDStr,
+				},
+			})
 			continue
 		}
 
@@ -173,13 +220,13 @@ func (s *AchievementService) GetAllAchievements(c *fiber.Ctx) error {
 
 		// Get student info
 		student, _ := s.studentRepo.GetByID(ref.StudentID)
-		var studentName, studentNIM string
+		var studentName, studentIDStr string
 		if student != nil {
 			studentUser, _ := s.userRepo.GetByID(student.UserID)
 			if studentUser != nil {
 				studentName = studentUser.FullName
 			}
-			studentNIM = student.StudentID
+			studentIDStr = student.StudentID
 		}
 
 		results = append(results, fiber.Map{
@@ -192,9 +239,9 @@ func (s *AchievementService) GetAllAchievements(c *fiber.Ctx) error {
 			"verified_at":  ref.VerifiedAt,
 			"created_at":   ref.CreatedAt,
 			"student": fiber.Map{
-				"id":   student.ID,
-				"name": studentName,
-				"nim":  studentNIM,
+				"id":         student.ID,
+				"name":       studentName,
+				"student_id": studentIDStr,
 			},
 		})
 	}
@@ -360,7 +407,6 @@ func (s *AchievementService) GetAchievementByID(c *fiber.Ctx) error {
 	})
 }
 
-// ==================== 3. CREATE ACHIEVEMENT ====================
 func (s *AchievementService) CreateAchievement(c *fiber.Ctx) error {
 	ctx := context.Background()
 
@@ -716,10 +762,7 @@ func (s *AchievementService) UpdateAchievement(c *fiber.Ctx) error {
 	})
 }
 
-// ==================== 5. DELETE ACHIEVEMENT ====================
 func (s *AchievementService) DeleteAchievement(c *fiber.Ctx) error {
-	ctx := context.Background()
-
 	// Parse ID sebagai UUID PostgreSQL
 	refUUID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
@@ -728,7 +771,13 @@ func (s *AchievementService) DeleteAchievement(c *fiber.Ctx) error {
 
 	// 1. Get reference
 	ref, err := s.achievementRefRepo.GetReferenceByID(refUUID)
-	if err != nil || ref == nil {
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error":   "Failed to get achievement",
+			"details": err.Error(),
+		})
+	}
+	if ref == nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Achievement not found"})
 	}
 
@@ -756,23 +805,18 @@ func (s *AchievementService) DeleteAchievement(c *fiber.Ctx) error {
 		return c.Status(403).JSON(fiber.Map{"error": "Unauthorized role"})
 	}
 
-	// 3. Status check (hanya draft yang bisa di-delete)
 	if ref.Status != models.AchievementStatusDraft {
 		return c.Status(400).JSON(fiber.Map{
 			"error": "Only draft achievements can be deleted",
 		})
 	}
 
-	// 4. Delete dari MongoDB
-	err = s.achievementRepo.DeleteAchievement(ctx, ref.MongoAchievementID)
+	err = s.achievementRefRepo.SoftDelete(refUUID)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Failed to delete achievement from MongoDB"})
-	}
-
-	// 5. Delete reference dari PostgreSQL
-	err = s.achievementRefRepo.DeleteReference(refUUID)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Failed to delete achievement reference"})
+		return c.Status(500).JSON(fiber.Map{
+			"error":   "Failed to delete achievement",
+			"details": err.Error(),
+		})
 	}
 
 	return c.JSON(fiber.Map{
@@ -781,14 +825,12 @@ func (s *AchievementService) DeleteAchievement(c *fiber.Ctx) error {
 		"data": fiber.Map{
 			"id":              ref.ID,
 			"previous_status": ref.Status,
-			"deleted_at":      time.Now(),
+			"new_status":      models.AchievementStatusDeleted,
 		},
 	})
 }
 
-// ==================== 6. SUBMIT ACHIEVEMENT ====================
 func (s *AchievementService) SubmitAchievement(c *fiber.Ctx) error {
-	// Parse ID sebagai UUID PostgreSQL
 	refUUID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid achievement ID"})
