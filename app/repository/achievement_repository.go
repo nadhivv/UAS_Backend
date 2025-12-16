@@ -188,19 +188,30 @@ func (r *achievementRepo) FindAchievements(ctx context.Context, studentIDs []str
 }
 
 func (r *achievementRepo) GetAchievementsByIDs(ctx context.Context, ids []string) ([]models.Achievement, error) {
+	if len(ids) == 0 {
+		return []models.Achievement{}, nil
+	}
+
 	var objectIDs []primitive.ObjectID
 	for _, id := range ids {
 		objectID, err := primitive.ObjectIDFromHex(id)
 		if err != nil {
-			return nil, fmt.Errorf("invalid achievement ID %s: %w", id, err)
+			continue
 		}
 		objectIDs = append(objectIDs, objectID)
+	}
+
+	if len(objectIDs) == 0 {
+		return []models.Achievement{}, nil
 	}
 
 	filter := bson.M{"_id": bson.M{"$in": objectIDs}}
 	
 	cursor, err := r.Collection.Find(ctx, filter)
 	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return []models.Achievement{}, nil
+		}
 		return nil, fmt.Errorf("failed to find achievements: %w", err)
 	}
 	defer cursor.Close(ctx)
