@@ -13,6 +13,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type AchievementService struct {
@@ -370,13 +371,31 @@ func (s *AchievementService) CreateAchievement(c *fiber.Ctx) error {
 	// Get user role
 	role, err := s.roleRepo.GetByID(user.RoleID)
 	if err != nil || role == nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Failed to get user role"})
+		return c.Status(500).JSON(fiber.Map{
+			"error": "Failed to get user role",
+		})
 	}
 
 	// Parse request body
 	var req models.CreateAchievementRequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
+		return c.Status(400).JSON(fiber.Map{
+			"error":   "Invalid request body",
+			"details": err.Error(),
+		})
+	}
+
+	// Validate required fields
+	if req.Title == "" {
+		return c.Status(400).JSON(fiber.Map{
+			"error": "Title is required",
+		})
+	}
+
+	if req.AchievementType == "" {
+		return c.Status(400).JSON(fiber.Map{
+			"error": "Achievement type is required",
+		})
 	}
 
 	// Validate achievement type
@@ -388,52 +407,109 @@ func (s *AchievementService) CreateAchievement(c *fiber.Ctx) error {
 	}
 
 	var studentID uuid.UUID
+	var studentName string
 
 	// Determine target student ID based on role
 	switch role.Name {
 	case "Mahasiswa":
 		// Mahasiswa can only create achievements for themselves
 		student, err := s.studentRepo.GetByUserID(userID)
-		if err != nil || student == nil {
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{
+				"error":   "Failed to get student profile",
+				"details": err.Error(),
+			})
+		}
+		
+		if student == nil {
 			return c.Status(403).JSON(fiber.Map{
 				"error": "User is not a student or student profile not found",
 			})
 		}
+		
 		studentID = student.ID
+		
+		// Get student name from user
+		studentUser, _ := s.userRepo.GetByID(student.UserID)
+		if studentUser != nil {
+			studentName = studentUser.FullName
+		}
 
 	case "Admin":
 		// Admin perlu menyertakan student_id di body
 		var adminReq struct {
 			models.CreateAchievementRequest
-			StudentID *uuid.UUID `json:"student_id,omitempty"`
+			StudentID *string `json:"student_id,omitempty"` // Changed to string for parsing
 		}
-
+		
 		if err := c.BodyParser(&adminReq); err != nil {
-			return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
+			return c.Status(400).JSON(fiber.Map{
+				"error":   "Invalid request body for admin",
+				"details": err.Error(),
+			})
 		}
-
-		if adminReq.StudentID == nil || *adminReq.StudentID == uuid.Nil {
+		
+		if adminReq.StudentID == nil || *adminReq.StudentID == "" {
 			return c.Status(400).JSON(fiber.Map{
 				"error": "student_id is required when creating achievement as admin",
 			})
 		}
-
-		student, err := s.studentRepo.GetByID(*adminReq.StudentID)
-		if err != nil || student == nil {
-			return c.Status(404).JSON(fiber.Map{"error": "Student not found"})
+		
+		// Parse student_id string to UUID
+		parsedStudentID, err := uuid.Parse(*adminReq.StudentID)
+		if err != nil {
+			return c.Status(400).JSON(fiber.Map{
+				"error": "Invalid student_id format",
+			})
 		}
-		studentID = *adminReq.StudentID
+		
+		student, err := s.studentRepo.GetByID(parsedStudentID)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{
+				"error":   "Failed to get student",
+				"details": err.Error(),
+			})
+		}
+		
+		if student == nil {
+			return c.Status(404).JSON(fiber.Map{
+				"error": "Student not found",
+			})
+		}
+		
+		studentID = parsedStudentID
 		req = adminReq.CreateAchievementRequest
+		
+		// Get student name
+		studentUser, _ := s.userRepo.GetByID(student.UserID)
+		if studentUser != nil {
+			studentName = studentUser.FullName
+		}
 
 	case "Dosen Wali":
-		return c.Status(403).JSON(fiber.Map{"error": "Dosen Wali cannot create achievements"})
+		return c.Status(403).JSON(fiber.Map{
+			"error": "Dosen Wali cannot create achievements",
+		})
 
 	default:
-		return c.Status(403).JSON(fiber.Map{"error": "Unauthorized role"})
+		return c.Status(403).JSON(fiber.Map{
+			"error": "Unauthorized role: " + role.Name,
+		})
+	}
+
+	// Initialize Attachments slice if nil
+	if req.Attachments == nil {
+		req.Attachments = []models.Attachment{}
+	}
+	
+	// Initialize Tags slice if nil
+	if req.Tags == nil {
+		req.Tags = []string{}
 	}
 
 	// Create achievement object untuk MongoDB
 	achievement := &models.Achievement{
+		ID:              primitive.NewObjectID(),
 		StudentID:       studentID,
 		AchievementType: req.AchievementType,
 		Title:           req.Title,
@@ -449,7 +525,10 @@ func (s *AchievementService) CreateAchievement(c *fiber.Ctx) error {
 	// 1. Simpan ke MongoDB dulu
 	mongoID, err := s.achievementRepo.CreateAchievement(ctx, achievement)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Failed to create achievement"})
+		return c.Status(500).JSON(fiber.Map{
+			"error":   "Failed to create achievement in MongoDB",
+			"details": err.Error(),
+		})
 	}
 
 	// 2. Buat reference di PostgreSQL dengan UUID sebagai ID API
@@ -463,26 +542,35 @@ func (s *AchievementService) CreateAchievement(c *fiber.Ctx) error {
 		UpdatedAt:          time.Now(),
 	}
 
+	// Create reference in PostgreSQL
 	if err := s.achievementRefRepo.CreateReference(ref); err != nil {
 		// Rollback: delete from MongoDB
-		s.achievementRepo.DeleteAchievement(ctx, mongoID)
-		return c.Status(500).JSON(fiber.Map{"error": "Failed to create achievement reference"})
+		_ = s.achievementRepo.DeleteAchievement(ctx, mongoID)
+		return c.Status(500).JSON(fiber.Map{
+			"error":   "Failed to create achievement reference in PostgreSQL",
+			"details": err.Error(),
+		})
 	}
 
 	return c.Status(201).JSON(fiber.Map{
 		"success": true,
 		"message": "Achievement created successfully",
 		"data": fiber.Map{
-			"id":               refID, // Return PostgreSQL UUID
-			"student_id":       studentID,
-			"achievement_type": req.AchievementType,
-			"title":            req.Title,
-			"status":           ref.Status,
-			"created_at":       ref.CreatedAt,
+			"id":                refID, 
+			"mongo_id":          mongoID, 
+			"student_id":        studentID,
+			"student_name":      studentName,
+			"achievement_type":  req.AchievementType,
+			"title":             req.Title,
+			"description":       req.Description,
+			"status":            ref.Status,
+			"points":            req.Points,
+			"created_at":        ref.CreatedAt,
+			"created_by":        userID,
+			"created_by_name":   user.FullName,
 		},
 	})
 }
-
 // ==================== 4. UPDATE ACHIEVEMENT ====================
 func (s *AchievementService) UpdateAchievement(c *fiber.Ctx) error {
 	ctx := context.Background()
