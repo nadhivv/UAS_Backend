@@ -943,7 +943,6 @@ func (s *AchievementService) VerifyAchievement(c *fiber.Ctx) error {
 	})
 }
 
-// ==================== 8. REJECT ACHIEVEMENT ====================
 func (s *AchievementService) RejectAchievement(c *fiber.Ctx) error {
 	// Parse ID sebagai UUID PostgreSQL
 	refUUID, err := uuid.Parse(c.Params("id"))
