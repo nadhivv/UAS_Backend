@@ -12,8 +12,29 @@ import (
 	"UAS/config"
 	"UAS/database"
 	"UAS/route"
+	_"UAS/docs"
+
 )
 
+// @title Achievement Management Backend API
+// @version 1.0
+// @description Backend API untuk manajemen prestasi mahasiswa
+// @termsOfService http://localhost:3000/terms
+
+// @contact.name API Support
+// @contact.url http://localhost:3000/support
+// @contact.email support@example.com
+
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+
+// @host localhost:3000
+// @BasePath /uas/api/
+// @schemes http
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 func main() {
 	if err := config.LoadConfig(); err != nil {
 		log.Println("Warning: .env file not found")
