@@ -24,15 +24,6 @@ func SetupReportRoutes(
 		roleRepo,
 	)
 
-	router.Get(
-		"/reports/statistics",
-		middleware.RequireAuth(userRepo),
-		reportService.GetStatistics,
-	)
-
-	router.Get(
-		"/reports/student/:id",
-		middleware.RequireAuth(userRepo),
-		reportService.GetStudentReport,
-	)
+	router.Get("/reports/statistics", middleware.RequireAuth(userRepo), reportService.GetStatistics)
+	router.Get("/reports/student/:id", middleware.RequireAuth(userRepo), reportService.GetStudentReport)
 }
