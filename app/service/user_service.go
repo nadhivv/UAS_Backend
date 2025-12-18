@@ -34,6 +34,20 @@ func NewUserService(
 	}
 }
 
+// GetAll godoc
+// @Summary Get all users
+// @Description Get list of all active users with pagination. Admin only.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "Page number" minimum(1) default(1)
+// @Param limit query int false "Items per page" minimum(1) maximum(100) default(10)
+// @Success 200 {object} map[string]interface{} "List of users with pagination"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Admin access required"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /users [get]
 func (s *UserService) GetAll(c *fiber.Ctx) error {
 	page := c.QueryInt("page", 1)
 	limit := c.QueryInt("limit", 10)
@@ -73,6 +87,20 @@ func (s *UserService) GetAll(c *fiber.Ctx) error {
 	})
 }
 
+// GetInactiveUsers godoc
+// @Summary Get inactive users
+// @Description Get list of inactive/soft-deleted users. Admin only.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "Page number" minimum(1) default(1)
+// @Param limit query int false "Items per page" minimum(1) maximum(100) default(10)
+// @Success 200 {object} map[string]interface{} "List of inactive users"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Admin access required"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /users/inactive [get]
 func (s *UserService) GetInactiveUsers(c *fiber.Ctx) error {
 	page := c.QueryInt("page", 1)
 	limit := c.QueryInt("limit", 10)
@@ -110,6 +138,21 @@ func (s *UserService) GetInactiveUsers(c *fiber.Ctx) error {
 	})
 }
 
+// GetByID godoc
+// @Summary Get user by ID
+// @Description Get user details by ID. Admin only.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "User ID (UUID)"
+// @Success 200 {object} map[string]interface{} "User details"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Invalid user ID"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Admin access required"
+// @Failure 404 {object} map[string]interface{} "Not Found - User not found"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /users/{id} [get]
 func (s *UserService) GetByID(c *fiber.Ctx) error {
 	idStr := c.Params("id")
 	id, err := uuid.Parse(idStr)
@@ -138,6 +181,21 @@ func (s *UserService) GetByID(c *fiber.Ctx) error {
 	})
 }
 
+// Create godoc
+// @Summary Create new user
+// @Description Create new user with role-specific profile (Mahasiswa/Dosen Wali). Admin only.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body models.CreateUserRequest true "User data"
+// @Success 201 {object} map[string]interface{} "User created successfully"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Invalid data or missing required fields"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Admin access required"
+// @Failure 409 {object} map[string]interface{} "Conflict - Username/email already exists"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /users [post]
 func (s *UserService) Create(c *fiber.Ctx) error {
 	var req models.CreateUserRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -304,7 +362,21 @@ func (s *UserService) createUserProfile(user *models.User, req *models.CreateUse
 	}
 }
 
-
+// Delete godoc
+// @Summary Delete user (soft delete)
+// @Description Soft delete user by ID. Admin only.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "User ID (UUID)"
+// @Success 200 {object} map[string]interface{} "User deleted successfully"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Invalid user ID"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Admin access required"
+// @Failure 404 {object} map[string]interface{} "Not Found - User not found"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /users/{id} [delete]
 func (s *UserService) Delete(c *fiber.Ctx) error {
 	idStr := c.Params("id")
 	id, err := uuid.Parse(idStr)
@@ -341,6 +413,23 @@ func (s *UserService) Delete(c *fiber.Ctx) error {
 	})
 }
 
+// Update godoc
+// @Summary Update user
+// @Description Update user information. Admin only.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "User ID (UUID)"
+// @Param request body models.UpdateUserRequest true "Update data"
+// @Success 200 {object} map[string]interface{} "User updated successfully"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Invalid data"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Admin access required"
+// @Failure 404 {object} map[string]interface{} "Not Found - User not found"
+// @Failure 409 {object} map[string]interface{} "Conflict - Email already used"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /users/{id} [put]
 func (s *UserService) Update(c *fiber.Ctx) error {
 	idStr := c.Params("id")
 	id, err := uuid.Parse(idStr)
@@ -412,6 +501,22 @@ func (s *UserService) Update(c *fiber.Ctx) error {
 	})
 }
 
+// UpdateRole godoc
+// @Summary Update user role
+// @Description Update user role. Admin only.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "User ID (UUID)"
+// @Param request body map[string]interface{} true "Role update data" SchemaExample({"roleId": "7013c2d3-53dd-402a-81b2-0a8988acdc0a"})
+// @Success 200 {object} map[string]interface{} "User role updated successfully"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Invalid user/role ID"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Admin access required"
+// @Failure 404 {object} map[string]interface{} "Not Found - User/Role not found"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /users/{id}/role [put]
 func (s *UserService) UpdateRole(c *fiber.Ctx) error {
 	idStr := c.Params("id")
 	id, err := uuid.Parse(idStr)
@@ -483,6 +588,22 @@ func (s *UserService) UpdateRole(c *fiber.Ctx) error {
 	})
 }
 
+// SearchByName godoc
+// @Summary Search users by name
+// @Description Search users by full name. Admin only.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param name query string true "Name to search"
+// @Param page query int false "Page number" minimum(1) default(1)
+// @Param limit query int false "Items per page" minimum(1) maximum(100) default(10)
+// @Success 200 {object} map[string]interface{} "Search results with pagination"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Name parameter required"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Admin access required"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /users/search [get]
 func (s *UserService) SearchByName(c *fiber.Ctx) error {
 	name := c.Query("name", "")
 	if name == "" {

@@ -35,6 +35,21 @@ func NewReportService(
 	}
 }
 
+// GetStatistics godoc
+// @Summary Get achievement statistics
+// @Description Get achievement statistics based on user role. Admin: all statistics, Dosen Wali: advisee's statistics, Mahasiswa: own statistics
+// @Tags Reports
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param start_date query string false "Start date (format: YYYY-MM-DD)" Example(2024-01-01)
+// @Param end_date query string false "End date (format: YYYY-MM-DD)" Example(2024-12-31)
+// @Success 200 {object} map[string]interface{} "Statistics data"
+// @Failure 400 {object} map[string]interface{} "Bad Request"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Access denied"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /reports/statistics [get]
 func (s *ReportService) GetStatistics(c *fiber.Ctx) error {
 	currentUser, ok := c.Locals("user").(*models.User)
 	if !ok {
@@ -99,6 +114,23 @@ func (s *ReportService) GetStatistics(c *fiber.Ctx) error {
 	})
 }
 
+// GetStudentReport godoc
+// @Summary Get student achievement report
+// @Description Get detailed achievement report for specific student. Admin: all students, Dosen Wali: only advisees, Mahasiswa: only self
+// @Tags Reports
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Student ID (UUID)"
+// @Param start_date query string false "Start date (format: YYYY-MM-DD)" Example(2024-01-01)
+// @Param end_date query string false "End date (format: YYYY-MM-DD)" Example(2024-12-31)
+// @Success 200 {object} map[string]interface{} "Student report data"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Invalid student ID"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Access denied"
+// @Failure 404 {object} map[string]interface{} "Not Found - Student not found"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /reports/students/{id} [get]
 func (s *ReportService) GetStudentReport(c *fiber.Ctx) error {
 	studentID, err := uuid.Parse(c.Params("id"))
 	if err != nil {

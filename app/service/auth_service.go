@@ -33,7 +33,19 @@ func NewAuthService(
 	}
 }
 
-
+// Login godoc
+// @Summary User login
+// @Description Authenticate user with username/email and password
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param request body models.LoginRequest true "Login credentials"
+// @Success 200 {object} models.LoginResponse "Login successful"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Invalid request body"
+// @Failure 401 {object} map[string]interface{} "Unauthorized - Invalid credentials"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Account inactive"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /auth/login [post]
 func (s *AuthService) Login(c *fiber.Ctx) error {
 	var req models.LoginRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -122,7 +134,20 @@ func (s *AuthService) Login(c *fiber.Ctx) error {
 	return c.JSON(response)
 }
 
-
+// RefreshToken godoc
+// @Summary Refresh access token
+// @Description Get new access token using refresh token
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body map[string]interface{} true "Refresh token" SchemaExample({"refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."})
+// @Success 200 {object} map[string]interface{} "Token refreshed successfully"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Refresh token required"
+// @Failure 401 {object} map[string]interface{} "Unauthorized - Invalid/expired refresh token"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Account inactive"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /auth/refresh [post]
 func (s *AuthService) RefreshToken(c *fiber.Ctx) error {
 	var req struct {
 		RefreshToken string `json:"refreshToken"`
@@ -214,7 +239,15 @@ func (s *AuthService) RefreshToken(c *fiber.Ctx) error {
 	})
 }
 
-
+// Logout godoc
+// @Summary User logout
+// @Description Logout user (client-side token deletion)
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "Logout successful"
+// @Router /auth/logout [post]
 func (s *AuthService) Logout(c *fiber.Ctx) error {
 	// Simple logout - client side delete tokens
 	// Untuk production, bisa implement token blacklist atau revoke di sini
@@ -225,7 +258,18 @@ func (s *AuthService) Logout(c *fiber.Ctx) error {
 	})
 }
 
-
+// Profile godoc
+// @Summary Get user profile
+// @Description Get authenticated user profile with role-specific data
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "User profile data"
+// @Failure 401 {object} map[string]interface{} "Unauthorized - Not authenticated"
+// @Failure 404 {object} map[string]interface{} "Not Found - User not found"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /auth/profile [get]
 func (s *AuthService) Profile(c *fiber.Ctx) error {
 	userID, ok := c.Locals("user_id").(uuid.UUID)
 	if !ok {
@@ -299,7 +343,20 @@ func (s *AuthService) getLecturerProfile(userID uuid.UUID) (*models.Lecturer, er
 	return s.lecturerRepo.GetByUserID(userID)
 }
 
-
+// ChangePassword godoc
+// @Summary Change user password
+// @Description Change authenticated user's password
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body map[string]interface{} true "Password change data" SchemaExample({"currentPassword": "oldPass123", "newPassword": "newPass456", "confirmPassword": "newPass456"})
+// @Success 200 {object} map[string]interface{} "Password updated successfully"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Validation failed"
+// @Failure 401 {object} map[string]interface{} "Unauthorized - Not authenticated"
+// @Failure 404 {object} map[string]interface{} "Not Found - User not found"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /auth/change-password [post]
 func (s *AuthService) ChangePassword(c *fiber.Ctx) error {
 	userID, ok := c.Locals("user_id").(uuid.UUID)
 	if !ok {

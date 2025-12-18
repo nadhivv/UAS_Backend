@@ -53,6 +53,23 @@ func contains(slice []string, item string) bool {
 	return false
 }
 
+// @Summary Get all achievements
+// @Description Get list of achievements based on user role. Admin: all achievements, Dosen Wali: advisee's achievements, Mahasiswa: own achievements
+// @Tags Achievements
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param status query string false "Filter by status" Enums(draft, submitted, verified, rejected)
+// @Param type query string false "Filter by achievement type" Enums(academic, competition, organization, publication, certification, other)
+// @Param search query string false "Search by title, description, or tags"
+// @Param page query int false "Page number" minimum(1) default(1)
+// @Param limit query int false "Items per page" minimum(1) maximum(100) default(10)
+// @Success 200 {object} map[string]interface{} "List of achievements"
+// @Success 200 {array} models.Achievement "Achievement list"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /achievements [get]
 func (s *AchievementService) GetAllAchievements(c *fiber.Ctx) error {
 	ctx := context.Background()
 
@@ -280,6 +297,21 @@ func (s *AchievementService) GetAllAchievements(c *fiber.Ctx) error {
 	})
 }
 
+// GetAchievementByID godoc
+// @Summary Get achievement by ID
+// @Description Get achievement details by ID. Access based on role: Admin: all, Dosen Wali: advisee's, Mahasiswa: own
+// @Tags Achievements
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Achievement ID (UUID)"
+// @Success 200 {object} map[string]interface{} "Achievement details"
+// @Failure 400 {object} map[string]interface{} "Bad Request"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden"
+// @Failure 404 {object} map[string]interface{} "Not Found"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /achievements/{id} [get]
 func (s *AchievementService) GetAchievementByID(c *fiber.Ctx) error {
 	ctx := context.Background()
 
@@ -407,6 +439,21 @@ func (s *AchievementService) GetAchievementByID(c *fiber.Ctx) error {
 	})
 }
 
+// CreateAchievement godoc
+// @Summary Create new achievement
+// @Description Create new achievement. Mahasiswa: only for themselves, Admin: for any student (require student_id), Dosen Wali: cannot create
+// @Tags Achievements
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body models.CreateAchievementRequest true "Achievement data"
+// @Success 201 {object} map[string]interface{} "Achievement created successfully"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Invalid data or missing fields"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Role not allowed"
+// @Failure 404 {object} map[string]interface{} "Not Found - Student not found (for admin)"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /achievements [post]
 func (s *AchievementService) CreateAchievement(c *fiber.Ctx) error {
 	ctx := context.Background()
 
@@ -617,7 +664,24 @@ func (s *AchievementService) CreateAchievement(c *fiber.Ctx) error {
 		},
 	})
 }
+
 // ==================== 4. UPDATE ACHIEVEMENT ====================
+// UpdateAchievement godoc
+// @Summary Update achievement
+// @Description Update achievement. Only draft achievements can be updated. Mahasiswa: own achievements only, Admin: all achievements
+// @Tags Achievements
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Achievement ID (UUID)"
+// @Param request body map[string]interface{} true "Update data"
+// @Success 200 {object} map[string]interface{} "Achievement updated successfully"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Invalid ID or not draft status"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Not owner or role not allowed"
+// @Failure 404 {object} map[string]interface{} "Not Found"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /achievements/{id} [put]
 func (s *AchievementService) UpdateAchievement(c *fiber.Ctx) error {
 	ctx := context.Background()
 
@@ -762,6 +826,21 @@ func (s *AchievementService) UpdateAchievement(c *fiber.Ctx) error {
 	})
 }
 
+// DeleteAchievement godoc
+// @Summary Delete achievement
+// @Description Delete achievement. Only draft achievements can be deleted. Mahasiswa: own achievements only, Admin: all achievements
+// @Tags Achievements
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Achievement ID (UUID)"
+// @Success 200 {object} map[string]interface{} "Achievement deleted successfully"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Invalid ID or not draft status"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Not owner or role not allowed"
+// @Failure 404 {object} map[string]interface{} "Not Found"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /achievements/{id} [delete]
 func (s *AchievementService) DeleteAchievement(c *fiber.Ctx) error {
 	// Parse ID sebagai UUID PostgreSQL
 	refUUID, err := uuid.Parse(c.Params("id"))
@@ -830,6 +909,21 @@ func (s *AchievementService) DeleteAchievement(c *fiber.Ctx) error {
 	})
 }
 
+// SubmitAchievement godoc
+// @Summary Submit achievement for verification
+// @Description Submit draft achievement for verification. Only draft achievements can be submitted
+// @Tags Achievements
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Achievement ID (UUID)"
+// @Success 200 {object} map[string]interface{} "Achievement submitted successfully"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Not draft status"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Not owner"
+// @Failure 404 {object} map[string]interface{} "Not Found"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /achievements/{id}/submit [post]
 func (s *AchievementService) SubmitAchievement(c *fiber.Ctx) error {
 	refUUID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
@@ -883,6 +977,21 @@ func (s *AchievementService) SubmitAchievement(c *fiber.Ctx) error {
 }
 
 // ==================== 7. VERIFY ACHIEVEMENT ====================
+// VerifyAchievement godoc
+// @Summary Verify achievement
+// @Description Verify submitted achievement. Only submitted achievements can be verified. Dosen Wali: only advisee's achievements, Admin: all achievements
+// @Tags Achievements
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Achievement ID (UUID)"
+// @Success 200 {object} map[string]interface{} "Achievement verified successfully"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Not submitted status"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Not advisor or role not allowed"
+// @Failure 404 {object} map[string]interface{} "Not Found"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /achievements/{id}/verify [post]
 func (s *AchievementService) VerifyAchievement(c *fiber.Ctx) error {
 	// Parse ID sebagai UUID PostgreSQL
 	refUUID, err := uuid.Parse(c.Params("id"))
@@ -943,6 +1052,22 @@ func (s *AchievementService) VerifyAchievement(c *fiber.Ctx) error {
 	})
 }
 
+// RejectAchievement godoc
+// @Summary Reject achievement
+// @Description Reject submitted achievement with rejection note. Only submitted achievements can be rejected
+// @Tags Achievements
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Achievement ID (UUID)"
+// @Param request body map[string]interface{} true "Rejection data" SchemaExample({"rejection_note": "Document incomplete"})
+// @Success 200 {object} map[string]interface{} "Achievement rejected successfully"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Missing rejection note or not submitted status"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Not advisor or role not allowed"
+// @Failure 404 {object} map[string]interface{} "Not Found"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /achievements/{id}/reject [post]
 func (s *AchievementService) RejectAchievement(c *fiber.Ctx) error {
 	// Parse ID sebagai UUID PostgreSQL
 	refUUID, err := uuid.Parse(c.Params("id"))
@@ -1013,6 +1138,21 @@ func (s *AchievementService) RejectAchievement(c *fiber.Ctx) error {
 }
 
 // ==================== 9. GET ACHIEVEMENT HISTORY ====================
+// GetAchievementHistory godoc
+// @Summary Get achievement history
+// @Description Get achievement status change history
+// @Tags Achievements
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Achievement ID (UUID)"
+// @Success 200 {object} map[string]interface{} "Achievement history"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Invalid ID"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Access denied"
+// @Failure 404 {object} map[string]interface{} "Not Found"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /achievements/{id}/history [get]
 func (s *AchievementService) GetAchievementHistory(c *fiber.Ctx) error {
 	// Parse ID sebagai UUID PostgreSQL
 	refUUID, err := uuid.Parse(c.Params("id"))
@@ -1132,6 +1272,22 @@ func (s *AchievementService) GetAchievementHistory(c *fiber.Ctx) error {
 }
 
 // ==================== 10. UPLOAD ATTACHMENT ====================
+// UploadAttachment godoc
+// @Summary Upload achievement attachment
+// @Description Upload file attachment to achievement. Only draft achievements can have attachments uploaded
+// @Tags Achievements
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Achievement ID (UUID)"
+// @Param file formData file true "File to upload (max 10MB, allowed: PDF, JPEG, PNG, DOC, DOCX)"
+// @Success 200 {object} map[string]interface{} "Attachment uploaded successfully"
+// @Failure 400 {object} map[string]interface{} "Bad Request - File required, too large, or wrong type"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Access denied"
+// @Failure 404 {object} map[string]interface{} "Not Found"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /achievements/{id}/attachments [post]
 func (s *AchievementService) UploadAttachment(c *fiber.Ctx) error {
 	ctx := context.Background()
 

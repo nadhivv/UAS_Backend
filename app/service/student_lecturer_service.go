@@ -39,6 +39,18 @@ func NewStudentLecturerService(
 
 
 // 1. GET /api/v1/students
+// GetAllStudents godoc
+// @Summary Get all students
+// @Description Get list of all students with user details and advisor information. Admin only.
+// @Tags Students
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "List of students"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Admin access required"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /students [get]
 func (s *StudentLecturerService) GetAllStudents(c *fiber.Ctx) error {
 	// Get all students dari repository
 	students, err := s.studentRepo.GetAll()
@@ -93,6 +105,21 @@ func (s *StudentLecturerService) GetAllStudents(c *fiber.Ctx) error {
 }
 
 // 2. GET /api/v1/students/:id
+// GetStudentByID godoc
+// @Summary Get student by ID
+// @Description Get student details by ID. Admin: any student, Dosen Wali: only advisees, Mahasiswa: only self
+// @Tags Students
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Student ID (UUID)"
+// @Success 200 {object} map[string]interface{} "Student details"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Invalid student ID"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Access denied"
+// @Failure 404 {object} map[string]interface{} "Not Found - Student not found"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /students/{id} [get]
 func (s *StudentLecturerService) GetStudentByID(c *fiber.Ctx) error {
 	studentIDStr := c.Params("id")
 	studentID, err := uuid.Parse(studentIDStr)
@@ -157,6 +184,24 @@ func (s *StudentLecturerService) GetStudentByID(c *fiber.Ctx) error {
 	})
 }
 
+// GetStudentAchievements godoc
+// @Summary Get student achievements
+// @Description Get achievements for specific student. Admin: any student, Dosen Wali: only advisees, Mahasiswa: only self
+// @Tags Students
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Student ID (UUID)"
+// @Param status query string false "Filter by status" Enums(draft, submitted, verified, rejected)
+// @Param page query int false "Page number" minimum(1) default(1)
+// @Param limit query int false "Items per page" minimum(1) maximum(100) default(10)
+// @Success 200 {object} map[string]interface{} "Student achievements list"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Invalid student ID"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Access denied"
+// @Failure 404 {object} map[string]interface{} "Not Found - Student not found"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /students/{id}/achievements [get]
 func (s *StudentLecturerService) GetStudentAchievements(c *fiber.Ctx) error {
 	studentIDStr := c.Params("id")
 	studentID, err := uuid.Parse(studentIDStr)
@@ -279,6 +324,22 @@ func (s *StudentLecturerService) GetStudentAchievements(c *fiber.Ctx) error {
 	})
 }
 
+// UpdateStudentAdvisor godoc
+// @Summary Update student advisor
+// @Description Assign or remove advisor for student. Admin only.
+// @Tags Students
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Student ID (UUID)"
+// @Param request body map[string]interface{} true "Advisor data" SchemaExample({"advisor_id": "123e4567-e89b-12d3-a456-426614174000"})
+// @Success 200 {object} map[string]interface{} "Advisor updated successfully"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Invalid student/advisor ID"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Admin access required"
+// @Failure 404 {object} map[string]interface{} "Not Found - Student/Lecturer not found"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /students/{id}/advisor [put]
 func (s *StudentLecturerService) UpdateStudentAdvisor(c *fiber.Ctx) error {
 	// Get student ID from params
 	studentIDStr := c.Params("id")
@@ -384,6 +445,22 @@ func (s *StudentLecturerService) UpdateStudentAdvisor(c *fiber.Ctx) error {
 	})
 }
 
+// GetAllLecturers godoc
+// @Summary Get all lecturers
+// @Description Get list of all lecturers with user details and advisees count. Admin only.
+// @Tags Lecturers
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "Page number" minimum(1) default(1)
+// @Param limit query int false "Items per page" minimum(1) maximum(100) default(10)
+// @Param search query string false "Search by lecturer name"
+// @Param department query string false "Filter by department"
+// @Success 200 {object} map[string]interface{} "List of lecturers"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Admin access required"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /lecturers [get]
 func (s *StudentLecturerService) GetAllLecturers(c *fiber.Ctx) error {
 	// Get query parameters
 	page := c.QueryInt("page", 1)
@@ -479,6 +556,23 @@ func (s *StudentLecturerService) GetAllLecturers(c *fiber.Ctx) error {
 	})
 }
 
+// GetLecturerAdvisees godoc
+// @Summary Get lecturer advisees
+// @Description Get list of students supervised by specific lecturer. Admin: any lecturer, Dosen Wali: only self
+// @Tags Lecturers
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Lecturer ID (UUID)"
+// @Param page query int false "Page number" minimum(1) default(1)
+// @Param limit query int false "Items per page" minimum(1) maximum(100) default(10)
+// @Success 200 {object} map[string]interface{} "List of advisees with achievement stats"
+// @Failure 400 {object} map[string]interface{} "Bad Request - Invalid lecturer ID"
+// @Failure 401 {object} map[string]interface{} "Unauthorized"
+// @Failure 403 {object} map[string]interface{} "Forbidden - Access denied"
+// @Failure 404 {object} map[string]interface{} "Not Found - Lecturer not found"
+// @Failure 500 {object} map[string]interface{} "Internal Server Error"
+// @Router /lecturers/{id}/advisees [get]
 func (s *StudentLecturerService) GetLecturerAdvisees(c *fiber.Ctx) error {
 	lecturerIDStr := c.Params("id")
 	lecturerID, err := uuid.Parse(lecturerIDStr)
