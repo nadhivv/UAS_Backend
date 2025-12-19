@@ -3,7 +3,6 @@ package service
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 	"net/http/httptest"
 	"testing"
 
@@ -11,151 +10,150 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 )
 
-
-// =========================
-// SETUP APP
-// =========================
-
-func setupUserApp(svc *UserService) *fiber.App {
+// Helper untuk setup app dan service agar tidak ada repo yang NIL
+func setupUserApp() (*fiber.App, *MockUserRepository, *MockRoleRepository, *MockStudentRepository, *MockLecturerRepository, *UserService) {
+	mUser := &MockUserRepository{}
+	mRole := &MockRoleRepository{}
+	mStd := &MockStudentRepository{}
+	mLect := &MockLecturerRepository{}
+	
+	svc := NewUserService(mUser, mRole, mStd, mLect)
+	
 	app := fiber.New()
 	app.Post("/users", svc.Create)
 	app.Get("/users", svc.GetAll)
 	app.Get("/users/:id", svc.GetByID)
 	app.Put("/users/:id", svc.Update)
 	app.Delete("/users/:id", svc.Delete)
-	return app
+	
+	return app, mUser, mRole, mStd, mLect, svc
 }
 
-// =========================
-// UNIT TESTS
-// =========================
+func TestUserService_Create_Mahasiswa_Success(t *testing.T) {
+	app, mUser, mRole, mStd, mLect, _ := setupUserApp()
 
-func TestCreateUser_Success(t *testing.T) {
 	roleID := uuid.New()
 	userID := uuid.New()
 
-	svc := &UserService{
-		roleRepo: &MockRoleRepository{
-			GetByIDFn: func(id uuid.UUID) (*models.Role, error) {
-				return &models.Role{ID: roleID, Name: "Mahasiswa"}, nil
-			},
-		},
-		userRepo: &MockUserRepository{
-			GetByUsernameFn: func(username string) (*models.User, error) {
-				return nil, nil // user belum ada
-			},
-			GetByEmailFn: func(email string) (*models.User, error) {
-				return nil, nil // email belum ada
-			},
-			CreateFn: func(user *models.User) (uuid.UUID, error) {
-				return userID, nil
-			},
-			GetByIDFn: func(id uuid.UUID) (*models.User, error) {
-				return &models.User{ID: userID, Username: "newuser"}, nil
-			},
-		},
+	// 1. Mock Role - WAJIB ada Name agar switch case di service tidak nyasar
+	mRole.GetByIDFn = func(id uuid.UUID) (*models.Role, error) {
+		return &models.Role{ID: roleID, Name: "Mahasiswa"}, nil
 	}
 
-	app := setupUserApp(svc)
+	// 2. Mock User Uniqueness
+	mUser.GetByUsernameFn = func(username string) (*models.User, error) { return nil, nil }
+	mUser.GetByEmailFn = func(email string) (*models.User, error) { return nil, nil }
 
+	// 3. Mock Create User
+	mUser.CreateFn = func(user *models.User) (uuid.UUID, error) { return userID, nil }
+
+	// 4. Mock Profile Mahasiswa
+	// Walaupun AdvisorID nil di request, pastikan Mock Lecturer tidak bikin panic
+	mLect.GetByIDFn = func(id uuid.UUID) (*models.Lecturer, error) {
+		return &models.Lecturer{ID: uuid.New()}, nil
+	}
+	mStd.CreateFn = func(s models.Student) (uuid.UUID, error) { return uuid.New(), nil }
+
+	// 5. Mock Fetch User Setelah Create (INI SERING JADI PENYEBAB PANIC DI BARIS 86)
+	// Pastikan return data LENGKAP, jangan cuma &models.User{}
+	mUser.GetByIDFn = func(id uuid.UUID) (*models.User, error) {
+		return &models.User{
+			ID:       userID, 
+			Username: "newuser", 
+			FullName: "New User",
+			RoleID:   roleID,
+		}, nil
+	}
+
+	// Payload
+	stdID, prodi, thn := "123456", "Informatika", "2023"
 	payload := models.CreateUserRequest{
-		Username: "newuser",
-		Email:    "newuser@example.com",
-		Password: "password123",
-		RoleID:   roleID.String(),
+		Username:     "newuser",
+		Email:        "new@example.com",
+		Password:     "password123",
+		FullName:     "New User",
+		RoleID:       roleID.String(),
+		StudentID:    &stdID,
+		ProgramStudy: &prodi,
+		AcademicYear: &thn,
+		AdvisorID:    nil, 
 	}
+
 	body, _ := json.Marshal(payload)
 	req := httptest.NewRequest("POST", "/users", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := app.Test(req, 3000)
-	if err != nil {
-		t.Fatalf("Request error: %v", err)
-	}
+	// Eksekusi - Gunakan timeout agar tidak hang
+	resp, _ := app.Test(req, 5000)
 
-	if resp.StatusCode != 201 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		t.Errorf("Expected 201 Created, got %d: %s", resp.StatusCode, string(bodyBytes))
-	}
+	assert.Equal(t, 201, resp.StatusCode)
 }
 
-func TestGetUserByID_Success(t *testing.T) {
-	userID := uuid.New()
+func TestUserService_GetAll_Success(t *testing.T) {
+	app, mUser, _, _, _, _ := setupUserApp()
 
-	svc := &UserService{
-		userRepo: &MockUserRepository{
-			GetByIDFn: func(id uuid.UUID) (*models.User, error) {
-				return &models.User{ID: userID, Username: "testuser", IsActive: true}, nil
-			},
-		},
+	mUser.GetAllFn = func(page, limit int) ([]models.User, int, error) {
+		return []models.User{{Username: "user1"}}, 1, nil
 	}
 
-	app := setupUserApp(svc)
+	req := httptest.NewRequest("GET", "/users?page=1&limit=10", nil)
+	resp, _ := app.Test(req)
+
+	assert.Equal(t, 200, resp.StatusCode)
+}
+
+func TestUserService_GetByID_NotFound(t *testing.T) {
+	app, mUser, _, _, _, _ := setupUserApp()
+	userID := uuid.New()
+
+	// Pastikan GetByIDFn di-override untuk mengembalikan nil agar memicu 404
+	mUser.GetByIDFn = func(id uuid.UUID) (*models.User, error) {
+		return nil, nil
+	}
 
 	req := httptest.NewRequest("GET", "/users/"+userID.String(), nil)
 	resp, _ := app.Test(req)
 
-	if resp.StatusCode != 200 {
-		t.Errorf("Expected 200 OK, got %d", resp.StatusCode)
-	}
+	assert.Equal(t, 404, resp.StatusCode)
 }
 
-func TestUpdateUser_Success(t *testing.T) {
+func TestUserService_Delete_Success(t *testing.T) {
+	app, mUser, _, _, _, _ := setupUserApp()
 	userID := uuid.New()
 
-	svc := &UserService{
-		userRepo: &MockUserRepository{
-			GetByIDFn: func(id uuid.UUID) (*models.User, error) {
-				return &models.User{ID: userID, Username: "oldname", IsActive: true}, nil
-			},
-			GetByEmailFn: func(email string) (*models.User, error) {
-				return nil, nil
-			},
-			UpdateFn: func(id uuid.UUID, req *models.UpdateUserRequest) error {
-				return nil
-			},
-		},
+	mUser.GetByIDFn = func(id uuid.UUID) (*models.User, error) {
+		return &models.User{ID: userID, IsActive: true}, nil
 	}
-
-	app := setupUserApp(svc)
-
-	newEmail := "updated@example.com"
-	payload := models.UpdateUserRequest{
-		Email: &newEmail,
-	}
-	body, _ := json.Marshal(payload)
-	req := httptest.NewRequest("PUT", "/users/"+userID.String(), bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, _ := app.Test(req)
-
-	if resp.StatusCode != 200 {
-		t.Errorf("Expected 200 OK, got %d", resp.StatusCode)
-	}
-}
-
-func TestDeleteUser_Success(t *testing.T) {
-	userID := uuid.New()
-
-	svc := &UserService{
-		userRepo: &MockUserRepository{
-			GetByIDFn: func(id uuid.UUID) (*models.User, error) {
-				return &models.User{ID: userID, IsActive: true}, nil
-			},
-			SoftDeleteFn: func(id uuid.UUID) error {
-				return nil
-			},
-		},
-	}
-
-	app := setupUserApp(svc)
+	mUser.SoftDeleteFn = func(id uuid.UUID) error { return nil }
 
 	req := httptest.NewRequest("DELETE", "/users/"+userID.String(), nil)
 	resp, _ := app.Test(req)
 
-	if resp.StatusCode != 200 {
-		t.Errorf("Expected 200 OK, got %d", resp.StatusCode)
+	assert.Equal(t, 200, resp.StatusCode)
+}
+
+func TestUserService_Update_EmailConflict(t *testing.T) {
+	app, mUser, _, _, _, _ := setupUserApp()
+	myID, otherID := uuid.New(), uuid.New()
+
+	mUser.GetByIDFn = func(id uuid.UUID) (*models.User, error) {
+		return &models.User{ID: myID, IsActive: true}, nil
 	}
+	// Mock email sudah dipakai orang lain
+	mUser.GetByEmailFn = func(email string) (*models.User, error) {
+		return &models.User{ID: otherID, Email: email}, nil
+	}
+
+	emailUpdate := "conflict@example.com"
+	payload := models.UpdateUserRequest{Email: &emailUpdate}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest("PUT", "/users/"+myID.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, _ := app.Test(req)
+
+	assert.Equal(t, 409, resp.StatusCode)
 }

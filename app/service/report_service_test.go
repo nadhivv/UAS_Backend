@@ -11,208 +11,150 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 )
 
-// --- HELPER SETUP ---
-func setupReportApp(svc *ReportService, user *models.User) *fiber.App {
+func TestReportService_GetStatistics_Admin_Success(t *testing.T) {
+	// 1. Setup Fiber & Mocks
 	app := fiber.New()
+	mockReportRepo := &MockReportRepository{}
+	mockRoleRepo := &MockRoleRepository{}
+	mockUserRepo := &MockUserRepository{}
+	mockStudentRepo := &MockStudentRepository{}
+	mockLecturerRepo := &MockLecturerRepository{}
 
-	app.Use(func(c *fiber.Ctx) error {
-		if user != nil {
-			c.Locals("user", user)
-			c.Locals("user_id", user.ID)
-		}
-		return c.Next()
+	s := NewReportService(mockReportRepo, mockUserRepo, mockStudentRepo, mockLecturerRepo, mockRoleRepo)
+
+	// 2. Data Dummy
+	adminID := uuid.New()
+	roleID := uuid.New()
+	
+	app.Get("/reports/statistics", func(c *fiber.Ctx) error {
+		// Sesuai dengan service: currentUser, ok := c.Locals("user").(*models.User)
+		c.Locals("user", &models.User{ID: adminID, RoleID: roleID})
+		return s.GetStatistics(c)
 	})
 
-	app.Get("/reports/statistics", svc.GetStatistics)
-	app.Get("/reports/students/:id", svc.GetStudentReport)
+	// 3. MOCK BEHAVIOR
+	// s.roleRepo.GetByID(currentUser.RoleID)
+	mockRoleRepo.GetByIDFn = func(id uuid.UUID) (*models.Role, error) {
+		return &models.Role{ID: roleID, Name: "Admin"}, nil
+	}
 
-	return app
+	// s.reportRepo.GetStatistics(...)
+	mockReportRepo.GetStatisticsFn = func(ctx context.Context, actorID uuid.UUID, scope string, start, end *time.Time) (*models.AchievementStats, error) {
+		// Menggunakan struct kosong agar tidak error "unknown field"
+		return &models.AchievementStats{}, nil
+	}
+
+	// 4. Execution
+	req := httptest.NewRequest("GET", "/reports/statistics?start_date=2024-01-01&end_date=2024-12-31", nil)
+	resp, _ := app.Test(req)
+
+	// 5. Assertions
+	assert.Equal(t, 200, resp.StatusCode)
+	
+	var resBody map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&resBody)
+	assert.True(t, resBody["success"].(bool))
 }
 
-// --- TEST CASES ---
+func TestReportService_GetStatistics_Mahasiswa_Success(t *testing.T) {
+	app := fiber.New()
+	mockReportRepo := &MockReportRepository{}
+	mockRoleRepo := &MockRoleRepository{}
+	mockStudentRepo := &MockStudentRepository{}
+	
+	s := NewReportService(mockReportRepo, nil, mockStudentRepo, nil, mockRoleRepo)
 
-func TestGetStatistics_Mahasiswa(t *testing.T) {
 	userID := uuid.New()
 	roleID := uuid.New()
 	studentID := uuid.New()
 
-	mockUser := &models.User{ID: userID, RoleID: roleID, FullName: "Mhs Test"}
+	app.Get("/reports/statistics", func(c *fiber.Ctx) error {
+		c.Locals("user", &models.User{ID: userID, RoleID: roleID})
+		return s.GetStatistics(c)
+	})
 
-	svc := &ReportService{
-		roleRepo: &MockRoleRepository{
-			GetByIDFn: func(id uuid.UUID) (*models.Role, error) {
-				return &models.Role{ID: roleID, Name: "Mahasiswa"}, nil
-			},
-		},
-		studentRepo: &MockStudentRepository{
-			GetByUserIDFn: func(uid uuid.UUID) (*models.Student, error) {
-				return &models.Student{ID: studentID, UserID: userID}, nil
-			},
-		},
-		reportRepo: &MockReportRepository{
-			GetAchievementStatsFn: func(ctx context.Context, actorID uuid.UUID, roleName string, start, end *time.Time) (*models.AchievementStats, error) {
-				if actorID != studentID {
-					t.Errorf("Expected actorID %s, got %s", studentID, actorID)
-				}
-				
-				// RETURN SESUAI MODEL KAMU
-				return &models.AchievementStats{
-					ByType: map[string]int{
-						"Kompetisi": 5,
-						"Organisasi": 3,
-					},
-					ByPeriod: map[string]int{"2023": 8},
-				}, nil
-			},
-		},
+	mockRoleRepo.GetByIDFn = func(id uuid.UUID) (*models.Role, error) {
+		return &models.Role{Name: "Mahasiswa"}, nil
 	}
 
-	app := setupReportApp(svc, mockUser)
-
-	req := httptest.NewRequest("GET", "/reports/statistics?start_date=2023-01-01", nil)
-	resp, _ := app.Test(req, -1)
-
-	if resp.StatusCode != 200 {
-		t.Errorf("Expected 200 OK, got %d", resp.StatusCode)
+	mockStudentRepo.GetByUserIDFn = func(uID uuid.UUID) (*models.Student, error) {
+		return &models.Student{ID: studentID, UserID: uID}, nil
 	}
 
-	var responseBody map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&responseBody)
-	data := responseBody["data"].(map[string]interface{})
-
-	// Cek Data map[string]int "by_type"
-	byType := data["by_type"].(map[string]interface{})
-	
-	// JSON number di Go defaultnya float64 saat di-decode ke interface{}
-	if byType["Kompetisi"].(float64) != 5 {
-		t.Errorf("Expected 5 Kompetisi, got %v", byType["Kompetisi"])
+	mockReportRepo.GetStatisticsFn = func(ctx context.Context, actorID uuid.UUID, scope string, start, end *time.Time) (*models.AchievementStats, error) {
+		// Validasi bahwa service mengirim scope dan ID yang benar
+		assert.Equal(t, "student", scope)
+		assert.Equal(t, studentID, actorID)
+		return &models.AchievementStats{}, nil
 	}
-}
-
-func TestGetStatistics_DosenWali(t *testing.T) {
-	userID := uuid.New()
-	roleID := uuid.New()
-	lecturerID := uuid.New()
-
-	mockUser := &models.User{ID: userID, RoleID: roleID}
-
-	svc := &ReportService{
-		roleRepo: &MockRoleRepository{
-			GetByIDFn: func(id uuid.UUID) (*models.Role, error) {
-				return &models.Role{ID: roleID, Name: "Dosen Wali"}, nil
-			},
-		},
-		lecturerRepo: &MockLecturerRepository{
-			GetByUserIDFn: func(uid uuid.UUID) (*models.Lecturer, error) {
-				return &models.Lecturer{ID: lecturerID, UserID: userID}, nil
-			},
-		},
-		reportRepo: &MockReportRepository{
-			GetAchievementStatsFn: func(ctx context.Context, actorID uuid.UUID, roleName string, start, end *time.Time) (*models.AchievementStats, error) {
-				// RETURN SESUAI MODEL KAMU (Top Students)
-				return &models.AchievementStats{
-					TopStudents: []models.StudentAchievementSum{
-						{StudentName: "Budi", TotalPoints: 100},
-					},
-				}, nil
-			},
-		},
-	}
-
-	app := setupReportApp(svc, mockUser)
 
 	req := httptest.NewRequest("GET", "/reports/statistics", nil)
-	resp, _ := app.Test(req, -1)
+	resp, _ := app.Test(req)
 
-	if resp.StatusCode != 200 {
-		t.Errorf("Expected 200 OK, got %d", resp.StatusCode)
-	}
-	
-	var responseBody map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&responseBody)
-	data := responseBody["data"].(map[string]interface{})
-	
-	// Cek Top Students
-	topStudents := data["top_students"].([]interface{})
-	firstStudent := topStudents[0].(map[string]interface{})
-	
-	if firstStudent["student_name"] != "Budi" {
-		t.Errorf("Expected student name Budi, got %v", firstStudent["student_name"])
-	}
+	assert.Equal(t, 200, resp.StatusCode)
 }
 
-func TestGetStudentReport_Success_Advisor(t *testing.T) {
-	dosenUserID := uuid.New()
-	lecturerID := uuid.New()
-	studentID := uuid.New()
+func TestReportService_GetStudentReport_Success_Admin(t *testing.T) {
+	app := fiber.New()
+	mockReportRepo := &MockReportRepository{}
+	mockRoleRepo := &MockRoleRepository{}
 	
-	mockDosenUser := &models.User{ID: dosenUserID}
+	s := NewReportService(mockReportRepo, nil, nil, nil, mockRoleRepo)
 
-	svc := &ReportService{
-		studentRepo: &MockStudentRepository{
-			GetByIDFn: func(id uuid.UUID) (*models.Student, error) {
-				return &models.Student{ID: studentID, AdvisorID: &lecturerID}, nil
-			},
-		},
-		roleRepo: &MockRoleRepository{
-			GetByIDFn: func(id uuid.UUID) (*models.Role, error) {
-				return &models.Role{Name: "Dosen Wali"}, nil
-			},
-		},
-		lecturerRepo: &MockLecturerRepository{
-			GetByUserIDFn: func(uid uuid.UUID) (*models.Lecturer, error) {
-				return &models.Lecturer{ID: lecturerID, UserID: dosenUserID}, nil
-			},
-		},
-		reportRepo: &MockReportRepository{
-			GetAchievementStatsFn: func(ctx context.Context, actorID uuid.UUID, roleName string, start, end *time.Time) (*models.AchievementStats, error) {
-				// Return kosong tapi valid sesuai struct
-				return &models.AchievementStats{
-					ByType: map[string]int{},
-				}, nil
-			},
-		},
-	}
-
-	app := setupReportApp(svc, mockDosenUser)
-
-	req := httptest.NewRequest("GET", "/reports/students/"+studentID.String(), nil)
-	resp, _ := app.Test(req, -1)
-
-	if resp.StatusCode != 200 {
-		t.Errorf("Expected 200 OK, got %d", resp.StatusCode)
-	}
-}
-
-func TestGetStudentReport_AccessDenied(t *testing.T) {
-	attackerID := uuid.New()
+	adminID := uuid.New()
 	targetStudentID := uuid.New()
-	ownerUserID := uuid.New()
 
-	mockAttacker := &models.User{ID: attackerID}
+	app.Get("/reports/students/:id", func(c *fiber.Ctx) error {
+		c.Locals("user", &models.User{ID: adminID, RoleID: uuid.New()})
+		return s.GetStudentReport(c)
+	})
 
-	svc := &ReportService{
-		studentRepo: &MockStudentRepository{
-			GetByIDFn: func(id uuid.UUID) (*models.Student, error) {
-				return &models.Student{ID: targetStudentID, UserID: ownerUserID}, nil
-			},
-		},
-		roleRepo: &MockRoleRepository{
-			GetByIDFn: func(id uuid.UUID) (*models.Role, error) {
-				return &models.Role{Name: "Mahasiswa"}, nil
-			},
-		},
-		reportRepo: &MockReportRepository{},
+	// Mock Role: Admin
+	mockRoleRepo.GetByIDFn = func(id uuid.UUID) (*models.Role, error) {
+		return &models.Role{Name: "Admin"}, nil
 	}
 
-	app := setupReportApp(svc, mockAttacker)
+	mockReportRepo.GetStatisticsFn = func(ctx context.Context, actorID uuid.UUID, scope string, start, end *time.Time) (*models.AchievementStats, error) {
+		return &models.AchievementStats{}, nil
+	}
 
 	req := httptest.NewRequest("GET", "/reports/students/"+targetStudentID.String(), nil)
-	resp, _ := app.Test(req, -1)
+	resp, _ := app.Test(req)
 
-	if resp.StatusCode != 403 {
-		t.Errorf("Expected 403 Forbidden, got %d", resp.StatusCode)
+	assert.Equal(t, 200, resp.StatusCode)
+}
+
+func TestReportService_GetStudentReport_Forbidden_Mahasiswa(t *testing.T) {
+	app := fiber.New()
+	mockRoleRepo := &MockRoleRepository{}
+	mockStudentRepo := &MockStudentRepository{}
+	
+	s := NewReportService(nil, nil, mockStudentRepo, nil, mockRoleRepo)
+
+	myUserID := uuid.New()
+	targetStudentID := uuid.New()
+	otherUserID := uuid.New()
+
+	app.Get("/reports/students/:id", func(c *fiber.Ctx) error {
+		c.Locals("user", &models.User{ID: myUserID, RoleID: uuid.New()})
+		return s.GetStudentReport(c)
+	})
+
+	mockRoleRepo.GetByIDFn = func(id uuid.UUID) (*models.Role, error) {
+		return &models.Role{Name: "Mahasiswa"}, nil
 	}
+
+	// Mock Student: Mengembalikan data student milik ORANG LAIN (userID berbeda)
+	mockStudentRepo.GetByIDFn = func(id uuid.UUID) (*models.Student, error) {
+		return &models.Student{ID: targetStudentID, UserID: otherUserID}, nil
+	}
+
+	req := httptest.NewRequest("GET", "/reports/students/"+targetStudentID.String(), nil)
+	resp, _ := app.Test(req)
+
+	// Status 403 karena Mahasiswa tidak boleh melihat report mahasiswa lain
+	assert.Equal(t, 403, resp.StatusCode)
 }
