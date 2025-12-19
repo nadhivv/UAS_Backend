@@ -1,0 +1,161 @@
+package service
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"net/http/httptest"
+	"testing"
+
+	"UAS/app/models"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
+)
+
+
+// =========================
+// SETUP APP
+// =========================
+
+func setupUserApp(svc *UserService) *fiber.App {
+	app := fiber.New()
+	app.Post("/users", svc.Create)
+	app.Get("/users", svc.GetAll)
+	app.Get("/users/:id", svc.GetByID)
+	app.Put("/users/:id", svc.Update)
+	app.Delete("/users/:id", svc.Delete)
+	return app
+}
+
+// =========================
+// UNIT TESTS
+// =========================
+
+func TestCreateUser_Success(t *testing.T) {
+	roleID := uuid.New()
+	userID := uuid.New()
+
+	svc := &UserService{
+		roleRepo: &MockRoleRepository{
+			GetByIDFn: func(id uuid.UUID) (*models.Role, error) {
+				return &models.Role{ID: roleID, Name: "Mahasiswa"}, nil
+			},
+		},
+		userRepo: &MockUserRepository{
+			GetByUsernameFn: func(username string) (*models.User, error) {
+				return nil, nil // user belum ada
+			},
+			GetByEmailFn: func(email string) (*models.User, error) {
+				return nil, nil // email belum ada
+			},
+			CreateFn: func(user *models.User) (uuid.UUID, error) {
+				return userID, nil
+			},
+			GetByIDFn: func(id uuid.UUID) (*models.User, error) {
+				return &models.User{ID: userID, Username: "newuser"}, nil
+			},
+		},
+	}
+
+	app := setupUserApp(svc)
+
+	payload := models.CreateUserRequest{
+		Username: "newuser",
+		Email:    "newuser@example.com",
+		Password: "password123",
+		RoleID:   roleID.String(),
+	}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest("POST", "/users", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req, 3000)
+	if err != nil {
+		t.Fatalf("Request error: %v", err)
+	}
+
+	if resp.StatusCode != 201 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Errorf("Expected 201 Created, got %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+}
+
+func TestGetUserByID_Success(t *testing.T) {
+	userID := uuid.New()
+
+	svc := &UserService{
+		userRepo: &MockUserRepository{
+			GetByIDFn: func(id uuid.UUID) (*models.User, error) {
+				return &models.User{ID: userID, Username: "testuser", IsActive: true}, nil
+			},
+		},
+	}
+
+	app := setupUserApp(svc)
+
+	req := httptest.NewRequest("GET", "/users/"+userID.String(), nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != 200 {
+		t.Errorf("Expected 200 OK, got %d", resp.StatusCode)
+	}
+}
+
+func TestUpdateUser_Success(t *testing.T) {
+	userID := uuid.New()
+
+	svc := &UserService{
+		userRepo: &MockUserRepository{
+			GetByIDFn: func(id uuid.UUID) (*models.User, error) {
+				return &models.User{ID: userID, Username: "oldname", IsActive: true}, nil
+			},
+			GetByEmailFn: func(email string) (*models.User, error) {
+				return nil, nil
+			},
+			UpdateFn: func(id uuid.UUID, req *models.UpdateUserRequest) error {
+				return nil
+			},
+		},
+	}
+
+	app := setupUserApp(svc)
+
+	newEmail := "updated@example.com"
+	payload := models.UpdateUserRequest{
+		Email: &newEmail,
+	}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest("PUT", "/users/"+userID.String(), bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != 200 {
+		t.Errorf("Expected 200 OK, got %d", resp.StatusCode)
+	}
+}
+
+func TestDeleteUser_Success(t *testing.T) {
+	userID := uuid.New()
+
+	svc := &UserService{
+		userRepo: &MockUserRepository{
+			GetByIDFn: func(id uuid.UUID) (*models.User, error) {
+				return &models.User{ID: userID, IsActive: true}, nil
+			},
+			SoftDeleteFn: func(id uuid.UUID) error {
+				return nil
+			},
+		},
+	}
+
+	app := setupUserApp(svc)
+
+	req := httptest.NewRequest("DELETE", "/users/"+userID.String(), nil)
+	resp, _ := app.Test(req)
+
+	if resp.StatusCode != 200 {
+		t.Errorf("Expected 200 OK, got %d", resp.StatusCode)
+	}
+}
